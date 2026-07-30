@@ -8,10 +8,13 @@ const DEFAULT_SETTINGS = {
   ytDlpPath: 'yt-dlp',
   defaultDestinationMode: 'folder',
   defaultDestinationPath: '_Resources/YT',
-  includeDescription: true,
+  includeDescription: false,
   includeThumbnail: true,
   useVideoTitleAsFilename: true,
   rawUrlOnOwnLine: true,
+  useAutoCardLink: true,
+  enableDebugLogging: true,
+  logFolderPath: '.yt-importer',
   noteTypeProperty: 'type',
   noteTypeValue: 'youtube'
 };
@@ -27,6 +30,14 @@ function sanitizeFileName(input) {
 
 function yamlString(value) {
   return JSON.stringify(String(value ?? ''));
+}
+
+function yamlBlockString(value) {
+  return String(value || '')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => `  ${line}`)
+    .join('\n');
 }
 
 function formatDuration(seconds) {
@@ -95,15 +106,32 @@ async function ensureFolder(app, folderPath) {
   let current = '';
   for (const part of parts) {
     current = current ? `${current}/${part}` : part;
-    if (!app.vault.getAbstractFileByPath(current)) {
+    const existing = app.vault.getAbstractFileByPath(current);
+    if (!existing) {
       await app.vault.createFolder(current);
+    } else if (!(existing instanceof obsidian.TFolder)) {
+      throw new Error(`Cannot create folder because a file exists at: ${current}`);
     }
   }
 }
 
+function buildCardLink(videoUrl, title, description, thumbnail) {
+  const lines = [
+    '```cardlink',
+    `url: ${videoUrl}`,
+    `title: ${yamlString(title)}`,
+    'host: www.youtube.com'
+  ];
+  if (description) lines.push(`description: |-`, yamlBlockString(description));
+  if (thumbnail) lines.push(`image: ${thumbnail}`);
+  lines.push('```');
+  return lines.join('\n');
+}
+
 function buildVideoNote(video, playlist, settings) {
-  const videoUrl = video.webpage_url || video.url || `https://www.youtube.com/watch?v=${video.id}`;
-  const title = video.title || video.id || 'YouTube video';
+  const videoId = video.id || '';
+  const videoUrl = video.webpage_url || video.url || `https://www.youtube.com/watch?v=${videoId}`;
+  const title = video.title || videoId || 'YouTube video';
   const thumbnail = video.thumbnail || (Array.isArray(video.thumbnails) && video.thumbnails.length ? video.thumbnails[video.thumbnails.length - 1].url : '');
   const description = video.description || '';
   const durationSeconds = Number(video.duration || 0);
@@ -124,7 +152,7 @@ function buildVideoNote(video, playlist, settings) {
     `channel: ${yamlString(channel)}`,
     `channelUrl: ${yamlString(channelUrl)}`,
     `videoUrl: ${yamlString(videoUrl)}`,
-    `videoId: ${yamlString(video.id || '')}`,
+    `videoId: ${yamlString(videoId)}`,
     `playlistUrl: ${yamlString(playlistUrl)}`,
     `playlistId: ${yamlString(playlistId)}`,
     `playlistIndex: ${playlistIndex || 'null'}`,
@@ -139,20 +167,83 @@ function buildVideoNote(video, playlist, settings) {
     ''
   ];
 
-  if (settings.includeThumbnail && thumbnail) {
-    lines.push(`![${title}](${thumbnail})`, '');
+  if (settings.useAutoCardLink) {
+    lines.push(buildCardLink(videoUrl, title, description, thumbnail), '');
+  } else {
+    if (settings.includeThumbnail && thumbnail) lines.push(`![${title}](${thumbnail})`, '');
+    if (settings.rawUrlOnOwnLine) lines.push(videoUrl, '');
+    else lines.push(`[Открыть на YouTube](${videoUrl})`, '');
   }
-
-  lines.push('## Видео', '');
-  if (settings.rawUrlOnOwnLine) lines.push(videoUrl);
-  else lines.push(`[Открыть на YouTube](${videoUrl})`);
-  lines.push('');
 
   if (settings.includeDescription && description) {
     lines.push('## Описание', '', description.trim(), '');
   }
 
   return lines.join('\n');
+}
+
+class ImportLogger {
+  constructor(plugin) {
+    this.plugin = plugin;
+    this.lines = [];
+    this.errors = [];
+    this.startedAt = new Date();
+  }
+
+  stamp() {
+    return new Date().toISOString();
+  }
+
+  info(message) {
+    const line = `[${this.stamp()}] INFO ${message}`;
+    this.lines.push(line);
+    console.log('[YouTube Playlist Importer]', message);
+  }
+
+  error(message, error) {
+    const details = error instanceof Error ? `${error.message}\n${error.stack || ''}` : String(error || '');
+    const line = `[${this.stamp()}] ERROR ${message}${details ? `\n${details}` : ''}`;
+    this.lines.push(line);
+    this.errors.push(line);
+    console.error('[YouTube Playlist Importer]', message, error);
+  }
+
+  async writeFile(filePath, content) {
+    const existing = this.plugin.app.vault.getAbstractFileByPath(filePath);
+    if (existing instanceof obsidian.TFile) await this.plugin.app.vault.modify(existing, content);
+    else await this.plugin.app.vault.create(filePath, content);
+  }
+
+  async flush(summary) {
+    if (!this.plugin.settings.enableDebugLogging) return;
+    const folder = normalizeVaultPath(this.plugin.settings.logFolderPath || '.yt-importer');
+    await ensureFolder(this.plugin.app, folder);
+    const runId = this.startedAt.toISOString().replace(/[:.]/g, '-');
+    const report = [
+      '# YouTube Playlist Import Report',
+      '',
+      `- Started: ${this.startedAt.toISOString()}`,
+      `- Finished: ${new Date().toISOString()}`,
+      `- Playlist: ${summary.playlistUrl}`,
+      `- Destination: ${summary.destination}`,
+      `- Total: ${summary.total}`,
+      `- Created: ${summary.created}`,
+      `- Skipped: ${summary.skipped}`,
+      `- Failed: ${summary.failed}`,
+      '',
+      '## Log',
+      '',
+      '```text',
+      ...this.lines,
+      '```',
+      ''
+    ].join('\n');
+    await this.writeFile(`${folder}/latest-report.md`, report);
+    await this.writeFile(`${folder}/report-${runId}.md`, report);
+    if (this.errors.length) {
+      await this.writeFile(`${folder}/latest-errors.md`, ['# YouTube Playlist Import Errors', '', '```text', ...this.errors, '```', ''].join('\n'));
+    }
+  }
 }
 
 class ImportModal extends obsidian.Modal {
@@ -284,11 +375,11 @@ class ImportModal extends obsidian.Modal {
       });
       this.setProgress(result.total, result.total);
       this.updateStatus(`Done. Created ${result.created}, skipped ${result.skipped}, failed ${result.failed}.`, 'success');
-      new obsidian.Notice(`YouTube import finished: ${result.created} created, ${result.skipped} skipped.`);
+      new obsidian.Notice(`YouTube import finished: ${result.created} created, ${result.skipped} skipped, ${result.failed} failed.`);
     } catch (error) {
       console.error('[YouTube Playlist Importer]', error);
       this.updateStatus(error instanceof Error ? error.message : String(error), 'error');
-      new obsidian.Notice('YouTube playlist import failed. See the modal or developer console.');
+      new obsidian.Notice('YouTube playlist import failed. See the modal or debug report.');
     } finally {
       this.isRunning = false;
       this.importButton.disabled = false;
@@ -342,6 +433,36 @@ class SettingsTab extends obsidian.PluginSettingTab {
         }));
 
     new obsidian.Setting(containerEl)
+      .setName('Use Auto Card Link format')
+      .setDesc('Writes a ```cardlink YAML block compatible with nekoshita/obsidian-auto-card-link. The Auto Card Link plugin must be installed and enabled to render the card.')
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.useAutoCardLink)
+        .onChange(async (value) => {
+          this.plugin.settings.useAutoCardLink = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new obsidian.Setting(containerEl)
+      .setName('Enable debug logging')
+      .setDesc('Creates import reports and error logs inside the vault.')
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.enableDebugLogging)
+        .onChange(async (value) => {
+          this.plugin.settings.enableDebugLogging = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new obsidian.Setting(containerEl)
+      .setName('Log folder')
+      .setDesc('Vault-relative folder for import reports.')
+      .addText((text) => text
+        .setValue(this.plugin.settings.logFolderPath)
+        .onChange(async (value) => {
+          this.plugin.settings.logFolderPath = value.trim() || '.yt-importer';
+          await this.plugin.saveSettings();
+        }));
+
+    new obsidian.Setting(containerEl)
       .setName('Type property name')
       .setDesc('Frontmatter property used for the source type.')
       .addText((text) => text
@@ -381,7 +502,7 @@ class SettingsTab extends obsidian.PluginSettingTab {
 
     new obsidian.Setting(containerEl)
       .setName('Raw URL on its own line')
-      .setDesc('Keeps links compatible with card-style plugins. Programmatic insertion may still require those plugins to refresh the note.')
+      .setDesc('Used when Auto Card Link format is disabled.')
       .addToggle((toggle) => toggle
         .setValue(this.plugin.settings.rawUrlOnOwnLine)
         .onChange(async (value) => {
@@ -408,7 +529,7 @@ class YouTubePlaylistImporterPlugin extends obsidian.Plugin {
     await this.saveData(this.settings);
   }
 
-  async fetchPlaylist(url) {
+  async fetchPlaylist(url, logger) {
     const args = [
       '--flat-playlist',
       '--dump-single-json',
@@ -417,11 +538,13 @@ class YouTubePlaylistImporterPlugin extends obsidian.Plugin {
       '--yes-playlist',
       url
     ];
+    logger.info(`Running yt-dlp for playlist: ${url}`);
     let output;
     try {
       output = await runCommand(this.settings.ytDlpPath, args, 300000);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      logger.error('yt-dlp failed', error);
       if (/ENOENT|not recognized|cannot find/i.test(message)) {
         throw new Error('yt-dlp was not found. Install it or set the full path in the plugin settings.');
       }
@@ -431,7 +554,8 @@ class YouTubePlaylistImporterPlugin extends obsidian.Plugin {
     let playlist;
     try {
       playlist = JSON.parse(output.stdout);
-    } catch (_) {
+    } catch (error) {
+      logger.error('Failed to parse yt-dlp JSON', error);
       throw new Error('yt-dlp returned invalid JSON. Update yt-dlp and try again.');
     }
 
@@ -439,23 +563,50 @@ class YouTubePlaylistImporterPlugin extends obsidian.Plugin {
       throw new Error('No playlist entries were found. The playlist may be private, unavailable, or invalid.');
     }
     playlist.original_url = url;
+    logger.info(`Playlist parsed: ${playlist.title || playlist.id || 'Untitled'}; entries=${playlist.entries.length}`);
     return playlist;
   }
 
   async importPlaylist(options) {
-    const playlist = await this.fetchPlaylist(options.playlistUrl);
-    const entries = playlist.entries.filter(Boolean);
-    if (!entries.length) throw new Error('The playlist contains no accessible videos.');
+    const logger = new ImportLogger(this);
+    let summary = {
+      playlistUrl: options.playlistUrl,
+      destination: normalizeVaultPath(options.destinationPath),
+      total: 0,
+      created: 0,
+      skipped: 0,
+      failed: 0
+    };
 
-    if (options.destinationMode === 'folder') {
-      return this.importToFolder(entries, playlist, options);
+    try {
+      const playlist = await this.fetchPlaylist(options.playlistUrl, logger);
+      const entries = playlist.entries.filter(Boolean);
+      if (!entries.length) throw new Error('The playlist contains no accessible videos.');
+      summary.total = entries.length;
+      logger.info(`Import started to ${summary.destination}`);
+
+      const result = options.destinationMode === 'folder'
+        ? await this.importToFolder(entries, playlist, options, logger)
+        : await this.importToSingleNote(entries, playlist, options, logger);
+      summary = Object.assign(summary, result);
+      logger.info(`Import finished: created=${result.created}, skipped=${result.skipped}, failed=${result.failed}`);
+      return result;
+    } catch (error) {
+      logger.error('Import aborted', error);
+      throw error;
+    } finally {
+      try {
+        await logger.flush(summary);
+      } catch (logError) {
+        console.error('[YouTube Playlist Importer] Failed to write log', logError);
+      }
     }
-    return this.importToSingleNote(entries, playlist, options);
   }
 
-  async importToFolder(entries, playlist, options) {
+  async importToFolder(entries, playlist, options, logger) {
     const folder = normalizeVaultPath(options.destinationPath);
     await ensureFolder(this.app, folder);
+    logger.info(`Destination folder ready: ${folder}`);
 
     let created = 0;
     let skipped = 0;
@@ -463,31 +614,43 @@ class YouTubePlaylistImporterPlugin extends obsidian.Plugin {
 
     for (let index = 0; index < entries.length; index += 1) {
       const entry = entries[index];
-      options.onProgress(index, entries.length, entry.title || entry.id || 'Video');
+      const label = entry.title || entry.id || 'Video';
+      options.onProgress(index, entries.length, label);
       try {
-        const titlePart = this.settings.useVideoTitleAsFilename ? sanitizeFileName(entry.title || entry.id) : sanitizeFileName(entry.id);
-        const baseName = `${String(index + 1).padStart(4, '0')} ${titlePart}`;
-        let notePath = `${folder}/${baseName}.md`;
+        const titlePart = this.settings.useVideoTitleAsFilename
+          ? sanitizeFileName(entry.title || entry.id)
+          : sanitizeFileName(entry.id);
+        let notePath = `${folder}/${titlePart}.md`;
         let suffix = 2;
+
         while (this.app.vault.getAbstractFileByPath(notePath)) {
           const existing = this.app.vault.getAbstractFileByPath(notePath);
           if (existing instanceof obsidian.TFile) {
             const text = await this.app.vault.cachedRead(existing);
-            if (text.includes(`videoId: ${yamlString(entry.id || '')}`)) {
+            const idNeedle = `videoId: ${yamlString(entry.id || '')}`;
+            const urlNeedle = entry.webpage_url || entry.url || `https://www.youtube.com/watch?v=${entry.id}`;
+            if (text.includes(idNeedle) || text.includes(urlNeedle)) {
               skipped += 1;
+              logger.info(`Skipped existing note: ${notePath}`);
               notePath = '';
               break;
             }
           }
-          notePath = `${folder}/${baseName} ${suffix}.md`;
+          notePath = `${folder}/${titlePart} (${suffix}).md`;
           suffix += 1;
         }
+
         if (!notePath) continue;
-        await this.app.vault.create(notePath, buildVideoNote(entry, playlist, this.settings));
+        logger.info(`Creating note: ${notePath}`);
+        const createdFile = await this.app.vault.create(notePath, buildVideoNote(entry, playlist, this.settings));
+        if (!(createdFile instanceof obsidian.TFile)) throw new Error(`Vault did not return a file for ${notePath}`);
+        const verified = this.app.vault.getAbstractFileByPath(notePath);
+        if (!(verified instanceof obsidian.TFile)) throw new Error(`Created file could not be verified: ${notePath}`);
         created += 1;
+        logger.info(`Created note: ${notePath}`);
       } catch (error) {
         failed += 1;
-        console.error('[YouTube Playlist Importer] Failed entry', entry, error);
+        logger.error(`Failed entry ${entry.id || index + 1}: ${label}`, error);
       }
     }
 
@@ -495,7 +658,7 @@ class YouTubePlaylistImporterPlugin extends obsidian.Plugin {
     return { total: entries.length, created, skipped, failed };
   }
 
-  async importToSingleNote(entries, playlist, options) {
+  async importToSingleNote(entries, playlist, options, logger) {
     let notePath = normalizeVaultPath(options.destinationPath);
     if (!notePath.toLowerCase().endsWith('.md')) notePath += '.md';
     const parent = path.posix.dirname(notePath);
@@ -533,10 +696,16 @@ class YouTubePlaylistImporterPlugin extends obsidian.Plugin {
       const url = entry.webpage_url || entry.url || `https://www.youtube.com/watch?v=${entry.id}`;
       if (existingText.includes(url)) {
         skipped += 1;
+        logger.info(`Skipped existing URL in single note: ${url}`);
         continue;
       }
       const title = entry.title || entry.id || 'YouTube video';
-      lines.push(`## ${index + 1}. ${title}`, '', url, '');
+      lines.push(`## ${index + 1}. ${title}`, '');
+      if (this.settings.useAutoCardLink) {
+        lines.push(buildCardLink(url, title, entry.description || '', entry.thumbnail || ''), '');
+      } else {
+        lines.push(url, '');
+      }
       created += 1;
     }
 
