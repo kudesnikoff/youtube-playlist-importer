@@ -1,0 +1,10 @@
+{
+  "name": "youtube-playlist-importer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Obsidian plugin for importing YouTube playlists.",
+  "main": "main.js",
+  "scripts": {
+    "build": "node -e \"console.log('main.js is already bundled for this prototype')\""
+  }
+}
