@@ -1,0 +1,38 @@
+name: Release beta
+
+on:
+  push:
+    branches:
+      - feature/export-note-to-youtube
+    paths:
+      - manifest.json
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Patch beta build
+        run: node scripts/patch-oauth-client-secret.cjs
+
+      - name: Create beta release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(node -p "require('./manifest.json').version")
+          TAG="$VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists"
+            exit 0
+          fi
+          gh release create "$TAG" \
+            main.js manifest.json styles.css \
+            --target "$GITHUB_SHA" \
+            --title "$TAG" \
+            --notes "Beta build for BRAT testing. Fixes Google OAuth token exchange by securely using the Desktop OAuth client secret from Obsidian SecretStorage." \
+            --prerelease

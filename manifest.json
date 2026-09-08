@@ -1,9 +1,9 @@
 {
   "id": "youtube-playlist-importer",
   "name": "YouTube Playlist Importer",
-  "version": "0.1.2",
-  "minAppVersion": "1.5.0",
-  "description": "Import a YouTube playlist into an Obsidian folder with one Auto Card Link compatible note per video.",
+  "version": "0.2.0-beta.2",
+  "minAppVersion": "1.11.4",
+  "description": "Two-way YouTube playlist tools for Obsidian: import playlists into notes and send YouTube links from the current note to an authorized playlist.",
   "author": "Kudesnik",
   "isDesktopOnly": true
 }
