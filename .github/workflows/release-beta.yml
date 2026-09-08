@@ -17,6 +17,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Patch beta build
+        run: node scripts/patch-oauth-client-secret.cjs
+
       - name: Create beta release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -31,5 +34,5 @@ jobs:
             main.js manifest.json styles.css \
             --target "$GITHUB_SHA" \
             --title "$TAG" \
-            --notes "Beta build for BRAT testing of Obsidian → YouTube playlist export." \
+            --notes "Beta build for BRAT testing. Fixes Google OAuth token exchange by securely using the Desktop OAuth client secret from Obsidian SecretStorage." \
             --prerelease
