@@ -1,7 +1,14 @@
+// Copyright (c) 2026 Kudesnik
+// Licensed under the PolyForm Noncommercial License 1.0.0.
+// Commercial use requires separate permission.
+
 const fs = require('fs');
 
 const file = 'main.js';
 let s = fs.readFileSync(file, 'utf8');
+
+const licenseHeader = `// Copyright (c) 2026 Kudesnik\n// Licensed under the PolyForm Noncommercial License 1.0.0.\n// Commercial use requires separate permission.\n\n`;
+if (!s.startsWith('// Copyright (c) 2026 Kudesnik')) s = licenseHeader + s;
 
 function replaceOnce(from, to, label) {
   if (!s.includes(from)) throw new Error(`Patch target not found: ${label}`);
