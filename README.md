@@ -95,32 +95,16 @@ The current development builds are distributed through GitHub releases and can b
 
 1. Install **BRAT** from Obsidian Community Plugins.
 2. Enable BRAT.
-3. Open:
-
-   `Settings → BRAT`
-
-4. Add the repository:
-
-   `https://github.com/kudesnikoff/youtube-playlist-importer`
-
+3. Open `Settings → BRAT`.
+4. Add the repository: `https://github.com/kudesnikoff/youtube-playlist-importer`
 5. If the repository is already installed, open **Change plugin version**.
-6. Select the latest beta release, for example:
-
-   `0.2.0-beta.2`
-
+6. Select the latest beta release, for example `0.2.0-beta.2`.
 7. Keep **Enable after installing the plugin** enabled.
 8. Install/change the version.
-9. Open:
-
-   `Settings → Community plugins`
-
+9. Open `Settings → Community plugins`.
 10. Make sure **YouTube Playlist Importer** is enabled.
 
-The release contains the files required by BRAT:
-
-- `main.js`
-- `manifest.json`
-- `styles.css`
+The release contains the files required by BRAT: `main.js`, `manifest.json`, and `styles.css`.
 
 ---
 
@@ -130,29 +114,17 @@ The Obsidian → YouTube workflow requires permission to manage your YouTube pla
 
 ### 1. Create a Google Cloud project
 
-Open Google Cloud Console and create a project, for example:
-
-`YouTube Sort`
+Open Google Cloud Console and create a project, for example `YouTube Sort`.
 
 You do not need to activate the Google Cloud free trial just for this plugin.
 
 ### 2. Enable YouTube Data API v3
 
-Open:
-
-`APIs & Services → Library`
-
-Search for:
-
-`YouTube Data API v3`
-
-Open it and press **Enable**.
+Open `APIs & Services → Library`, search for `YouTube Data API v3`, open it and press **Enable**.
 
 ### 3. Configure Google Auth Platform
 
-Open **Google Auth Platform**.
-
-Complete the required application information under **Branding**.
+Open **Google Auth Platform** and complete the required application information under **Branding**.
 
 A simple setup for personal use can use:
 
@@ -169,33 +141,20 @@ For a personal Google account use:
 - User type: **External**
 - Publishing status: **Testing**
 
-While the app is in Testing mode, add the Google account that owns the YouTube playlists under **Test users**.
-
-You do not need to publish the application publicly for personal use.
+While the app is in Testing mode, add the Google account that owns the YouTube playlists under **Test users**. You do not need to publish the application publicly for personal use.
 
 ### 5. Create an OAuth Desktop client
 
-Open:
-
-`Google Auth Platform → Clients`
-
-Choose **Create client** and select:
+Open `Google Auth Platform → Clients`, choose **Create client** and select:
 
 - Application type: **Desktop app**
 - Name: `Obsidian YouTube Playlist Importer`
 
-Google will create credentials containing:
-
-- Client ID
-- Client secret
+Google will create credentials containing a Client ID and Client secret.
 
 ### 6. Enter the credentials in Obsidian
 
-Open:
-
-`Settings → YouTube Playlist Importer`
-
-Enter:
+Open `Settings → YouTube Playlist Importer` and enter:
 
 - **Google OAuth Client ID**
 - **Google OAuth Client secret**
@@ -204,148 +163,44 @@ The Client secret is stored using Obsidian **SecretStorage** rather than normal 
 
 ### 7. Connect YouTube
 
-Press **Connect**.
+Press **Connect**. The plugin will open Google authorization in your browser. Select the Google account that owns the YouTube playlists and approve the requested access.
 
-The plugin will open Google authorization in your browser. Select the Google account that owns the YouTube playlists and approve the requested access.
-
-During authorization the plugin starts a temporary local callback server on:
-
-`127.0.0.1:<random-port>`
-
-It exists only while the OAuth authorization flow is active.
-
-After successful authorization, the browser will show a message that YouTube has connected to Obsidian and can be closed.
+During authorization the plugin starts a temporary local callback server on `127.0.0.1:<random-port>`. It exists only while the OAuth authorization flow is active.
 
 ---
 
 ## Usage: send the current Obsidian note to YouTube
 
-Create or open a Markdown note containing YouTube links, for example:
+Create or open a Markdown note containing YouTube links, then run:
 
-```md
-# AI videos
+`YouTube Playlist Importer: Send links from current note to YouTube playlist`
 
-https://www.youtube.com/watch?v=AAAAAAAAAAA
-https://youtu.be/BBBBBBBBBBB
-https://www.youtube.com/watch?v=AAAAAAAAAAA
-```
-
-The same video may appear multiple times. The plugin will normalize the links to video IDs and remove duplicates before sending anything to YouTube.
-
-Then:
-
-1. Open the Markdown note.
-2. Open the Command Palette with `Ctrl/Cmd + P`.
-3. Run:
-
-   `YouTube Playlist Importer: Send links from current note to YouTube playlist`
-
-   Or click the YouTube icon in the Obsidian ribbon.
-
-4. The plugin analyzes the note and shows:
-   - total links found
-   - unique video IDs
-   - duplicates removed
-5. Select a destination playlist.
-6. Keep **Skip videos already in playlist** enabled if you want the plugin to compare the note against the existing playlist first.
-7. Press **Send**.
-
-Example result:
-
-```text
-Found: 138 links
-Unique: 127
-Duplicates removed: 11
-
-Added: 102
-Already existed: 25
-Failed: 0
-```
+The plugin analyzes the note, reports total links, unique video IDs and duplicates, then lets you select a destination playlist. With **Skip videos already in playlist** enabled, existing videos are ignored and only missing videos are added.
 
 ---
 
 ## Duplicate handling
 
-The plugin handles duplicates at two levels.
+The plugin handles duplicates at two levels:
 
-### Duplicates inside the Markdown note
-
-If the same video URL appears several times, it is converted to the same YouTube video ID and sent only once.
-
-### Videos already present in the target playlist
-
-When **Skip videos already in playlist** is enabled, the plugin reads the existing target playlist and compares its video IDs with the IDs found in the note.
-
-Videos already present are skipped instead of being inserted again.
+- duplicate URLs inside the Markdown note are normalized to video IDs and sent only once;
+- videos already present in the target playlist can be skipped before insertion.
 
 ---
 
 ## Usage: import YouTube playlist into Obsidian
 
-The original YouTube → Obsidian workflow is still available.
-
-Open the Command Palette and run:
+Run:
 
 `YouTube Playlist Importer: Import YouTube playlist to Obsidian`
 
-Paste a YouTube playlist URL and choose an output mode.
-
-### Folder mode
-
-Creates one Markdown note per video.
-
-Example:
-
-```text
-_Resources/YT/
-└── Playlist Name/
-    ├── Video one.md
-    ├── Video two.md
-    └── Video three.md
-```
-
-Each note can contain frontmatter such as:
-
-```yaml
----
-title: "Video title"
-type: "youtube"
-source: youtube
-videoUrl: "https://www.youtube.com/watch?v=..."
-videoId: "..."
-playlistUrl: "https://www.youtube.com/playlist?list=..."
-playlistId: "..."
-channel: "Channel name"
-thumbnailUrl: "https://..."
-generated: "..."
----
-```
-
-### Single-note mode
-
-Creates one Markdown note containing the playlist links.
-
-This is useful when you want to sort or reorganize the list manually before sending selected links back to YouTube.
+Paste a YouTube playlist URL and choose either folder mode (one Markdown note per video) or single-note mode (one Markdown note containing the playlist links).
 
 ---
 
 ## Auto Card Link support
 
-When enabled, imported video notes can include a block compatible with **obsidian-auto-card-link**.
-
-Example:
-
-````md
-```cardlink
-url: https://www.youtube.com/watch?v=...
-title: "Video title"
-description: "..."
-host: www.youtube.com
-image: https://...
-```
-````
-
-This allows imported YouTube links to be displayed as visual cards instead of plain URLs.
+When enabled, imported video notes can include blocks compatible with **obsidian-auto-card-link**, allowing YouTube links to be displayed as visual cards instead of plain URLs.
 
 ---
 
@@ -364,33 +219,12 @@ The Obsidian → YouTube command is also available through a ribbon icon.
 
 The plugin is designed to keep authentication data local to your Obsidian installation.
 
-### OAuth credentials
-
-The Google OAuth Client ID is stored in the plugin settings.
-
-The Google OAuth Client secret and refresh token are stored using **Obsidian SecretStorage** rather than being written directly into the plugin's ordinary `data.json` settings file.
-
-### OAuth tokens
-
-Access tokens are kept in memory and refreshed when necessary.
-
-### Local callback
-
-Google authorization uses a temporary loopback callback on `127.0.0.1`. No external server operated by this project is required for authentication.
-
-### No custom backend
-
-The plugin communicates directly with:
-
-- Google OAuth endpoints
-- YouTube Data API v3
-- YouTube / `yt-dlp` for playlist import
-
-There is no separate hosted backend for this plugin.
-
-### Permissions
-
-The current OAuth scope allows the plugin to work with the user's YouTube account, including playlist operations required for adding videos.
+- The Google OAuth Client ID is stored in plugin settings.
+- The Google OAuth Client secret and refresh token are stored using **Obsidian SecretStorage**.
+- Access tokens are kept in memory and refreshed when necessary.
+- Google authorization uses a temporary loopback callback on `127.0.0.1`.
+- No external server operated by this project is required for authentication.
+- The plugin communicates directly with Google OAuth endpoints, YouTube Data API v3, and YouTube/`yt-dlp` for playlist import.
 
 Only authorize the plugin using a Google Cloud OAuth client that you control and trust.
 
@@ -400,11 +234,7 @@ Only authorize the plugin using a Google Cloud OAuth client that you control and
 
 The Obsidian → YouTube functionality is currently in **beta testing**.
 
-Current beta release:
-
-`0.2.0-beta.2`
-
-The stable YouTube → Obsidian functionality from the earlier version has been kept while the reverse workflow is being tested.
+Current beta release: `0.2.0-beta.2`.
 
 ---
 
@@ -435,8 +265,6 @@ Planned and possible improvements include:
 
 ## Example workflow
 
-A practical PKM workflow can look like this:
-
 ```text
 YouTube Later playlist
         ↓
@@ -457,13 +285,9 @@ This makes Obsidian the organizational layer while YouTube remains the playback 
 
 ## Development
 
-Repository:
+Repository: `kudesnikoff/youtube-playlist-importer`
 
-`kudesnikoff/youtube-playlist-importer`
-
-Development of the Obsidian → YouTube workflow currently happens in:
-
-`feature/export-note-to-youtube`
+Development of the Obsidian → YouTube workflow currently happens in `feature/export-note-to-youtube`.
 
 Beta builds are published as GitHub prereleases for installation through BRAT.
 
@@ -471,4 +295,15 @@ Beta builds are published as GitHub prereleases for installation through BRAT.
 
 ## License
 
-A license has not yet been specified for this project. Add an explicit `LICENSE` file before distributing or accepting external contributions under a defined open-source license.
+This project is **source-available for noncommercial use** under the **PolyForm Noncommercial License 1.0.0**.
+
+You may use, study, modify, and redistribute the software for purposes permitted by that license. Commercial use is **not granted** by the public license.
+
+Commercial use, resale, paid distribution, inclusion in commercial products or services, or other use intended for commercial advantage requires separate written permission or a separate commercial license from the copyright holder.
+
+See:
+
+- [`LICENSE`](./LICENSE) — PolyForm Noncommercial License 1.0.0
+- [`COMMERCIAL-LICENSE.md`](./COMMERCIAL-LICENSE.md) — how commercial licensing works and how to request permission
+
+This licensing model is intentionally **not OSI Open Source**, because commercial use is restricted. The source remains publicly readable and available for qualifying noncommercial use.
