@@ -1,7 +1,7 @@
 {
   "id": "youtube-playlist-importer",
   "name": "YouTube Playlist Importer",
-  "version": "0.2.0-beta.1",
+  "version": "0.2.0-beta.2",
   "minAppVersion": "1.11.4",
   "description": "Two-way YouTube playlist tools for Obsidian: import playlists into notes and send YouTube links from the current note to an authorized playlist.",
   "author": "Kudesnik",
